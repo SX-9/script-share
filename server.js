@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 
-const accountManager = require('./account.js');
-const rateLimit = require('./limiter.js');
+const { manager: accountManager } = require('./modules/account.js');
+const rateLimit = require('./modules/limiter.js');
+const scriptManager = require('./modules/scripts.js');
 
 const app = express();
 
@@ -14,6 +15,8 @@ app.use('/raw', cors({
 
 rateLimit(app);
 accountManager(app);
+scriptManager(app);
+
 
 app.use('/raw', express.static('scripts'));
 

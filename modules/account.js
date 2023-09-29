@@ -1,7 +1,10 @@
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-module.exports = manager;
+module.exports = {
+    manager,
+    verifyPassword, getUserData
+};
 
 async function hashPassword(plaintextPassword, saltRounds) {
     const salt = await bcrypt.genSalt(saltRounds);
@@ -12,6 +15,12 @@ async function hashPassword(plaintextPassword, saltRounds) {
 async function verifyPassword(enteredPassword, hashedPassword) {
     const isMatch = await bcrypt.compare(enteredPassword, hashedPassword);
     return isMatch;
+}
+
+function getUserData(isPaying, username) {
+    let isPaid = (req.body.premiumCode && isValidCode) ? 'premium' : 'free';
+    let path ='./accounts/' + isPaid + '/' + username + '.json';
+    return JSON.parse(fs.readFileSync(path));
 }
 
 function manager(app) {
@@ -26,20 +35,20 @@ function manager(app) {
             info: 'Require A Username And Password',
         });
         
-        let validCode = 0;
+        let isValidCode = 0;
         if (req.body.premiumCode) {
-            let date = Date.now() / 1000;
+            let today = Date.now() / 1000;
             let validCodes = JSON.parse(fs.readFileSync('./accounts/premium-codes.json'));
             for (validCode of validCodes) {
                 if (req.body.premiumCode === validCode.code && validCode.expireAt > today) {
-                    validCode++; break;
+                    isValidCode++; break;
                 }
             }
-            if (!validCode) return res.status(402).json({
+            if (!isValidCode) return res.status(402).json({
                 message: "Invalid Code.",
             });
         }
-        let isPaid = (req.body.premiumCode && validCode) ? 'premium' : 'free';
+        let isPaid = (req.body.premiumCode && isValidCode) ? 'premium' : 'free';
         
         if (req.body.username.length >= 20) return res.status().json({
             message: "Invalid Username.",
@@ -60,16 +69,46 @@ function manager(app) {
         if (!fs.existsSync('./accounts/' + isPaid + '/' + req.body.username + '.json')) {
             fs.writeFileSync('./accounts/' + isPaid + '/' + req.body?.username + '.json', JSON.stringify({
                 username: req.body?.username,
-                password: hashPassword(req.body.password, 10)
+                password: await hashPassword(req.body.password, 10),
+                scripts: [],
             }));
             res.status(201).json({
                 message: 'Created',
-                username: 'Welcome ' + req.body.username + '!',
+                info: 'Welcome ' + req.body.username + '!',
             });
         } else {
             res.status(409).json({
                 message: 'Invalid Username.',
                 info: `Username ${req.body.username} Already Exists.`,
+            });
+        }
+    });
+
+    app.delete('/api/account', async (req, res) => {
+        if (!req.body) return res.status(400).json({
+            message: 'No Data Provided',
+        });
+
+        let keys = Object.keys(req.body)
+        if (!keys.includes('username') || !keys.includes('password') || !keys.includes('isPaying')) return res.status(400).json({
+            message: 'Insufficient Information',
+            info: 'Require Is Paying?, A Username, And Password',
+        });
+
+        let isPaying = req.body.isPaying ? 'premium' : 'free';
+
+        let path = './accounts/' + isPaying + '/' + req.body.username + '.json';
+        if (!fs.existsSync(path)) return res.status(404).json({
+            message: 'Invalid Username.',
+            info: `Username ${req.body.username} Doesn't Exists.`,
+        });
+        let file = JSON.parse(fs.readFileSync(path));
+
+        if (verifyPassword(req.body.password, file.password)) {
+            fs.unlinkSync(path);
+            res.status(200).json({
+                message: 'Deleted',
+                info: `${file.username}'s Account Deleted.`,
             });
         }
     });
