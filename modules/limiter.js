@@ -9,7 +9,7 @@ function limiter(app) {
         message: ['Rate Limited, Please wait for 1 hour'],
     }));
 
-    app.use('/api/accounts', rateLimit({
+    app.use('/api/account', rateLimit({
         windowMs: 24 * 60 * 60 * 1000,
         limit: 1,
         message: ['Rate Limited, Please wait for 1 day'],
